@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block start %}
+
+<div class="container card shadow-lg mt-5 ">
+    <table class="table">
+        <thead>
+            <tr>
+                <th scope="col">S.No.</th>
+                <th scope="col">Movie Name</th>
+                <th scope="col">Watch</th>
+                <th scope="col">Cancel Ticket</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for cartItems in carts.cart_items.all %}
+            <tr>
+                <th scope="row">{{ forloop.counter }}</th>
+                <td>
+                    <h5>{{ cartItems.movie.movie_name }}</h5>
+                </td>
+                <td>
+                    <button onclick="payNow('{{ cartItems.uid }}')" class="btn btn-warning">Pay Now</button>
+                </td>
+                <td>
+                    <a href="{% url 'remove_cart' cartItems.uid %}" class="btn btn-danger"> Cancel Ticket</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+function payNow(cartItemId) {
+    fetch('/create-order/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({ cart_item_id: cartItemId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.error) {
+            console.error('Error:', data.error);
+        } else {
+            var options = {
+                "key": data.key,
+                "amount": data.amount,
+                "currency": data.currency,
+                "order_id": data.id,
+                "handler": function (response){
+                    verifyPayment(response, cartItemId);
+                },
+                "prefill": {
+                    "name": "{{ request.user.username }}",
+                    "email": "{{ request.user.email }}"
+                },
+                "theme": {
+                    "color": "#3399cc"
+                }
+            };
+            var rzp1 = new Razorpay(options);
+            rzp1.open();
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+
+function verifyPayment(payment, cartItemId) {
+    fetch('/verify-payment/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            cart_item_id: cartItemId,
+            payment_id: payment.razorpay_payment_id,
+            order_id: payment.razorpay_order_id,
+            signature: payment.razorpay_signature
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Payment successful!');
+            location.reload();
+           
+        } else {
+            alert('Payment verification failed. Please try again.');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+    });
+}
+</script>
+
+{% endblock %}
